@@ -3,14 +3,15 @@ import graphqlHTTP from 'express-graphql'
 import { makeExecutableSchema } from 'graphql-tools'
 import cors from 'cors'
 import fetch from 'node-fetch';
+import {
+	COINCAP_API_URL,
+	SERVICE_PATH,
+	SERVICE_PORT
+} from "./constants.js"
 
 const app = express()
 
 app.use(cors())
-
-const homePath = '/graphql'
-const URL = 'http://localhost'
-const PORT = 3001
 
 const typeDefs = [`
   type Query {
@@ -38,8 +39,16 @@ const typeDefs = [`
 
 	type Asset {
 		id: String,
+		rank: String,
 		symbol: String,
-		name: String
+		name: String,
+		supply: String,
+		maxSupply: String,
+		marketCapUsd: String,
+		volumeUsd24Hr: String,
+		priceUsd: String,
+		changePercent24Hr: String,
+		vwap24Hr: String
 	}
 
 	enum AssetHistoryInterval {
@@ -129,105 +138,72 @@ const typeDefs = [`
   }
 `];
 
+var buildUrl = (path, args = {}) => {
+	let params = Object.keys(args)
+	.filter(key => args[key])
+	.map(key => `${key}=${args[key]}`).join('&');
+
+	let url = `${COINCAP_API_URL}${path}`;
+	if(params)
+		url += `?${params}`
+
+	return url;
+}
+
 const resolvers = {
   Query: {
 		assets: async (root, {limit, offset}) => {
-			let url = `https://api.coincap.io/v2/assets`
-			if(limit) url += `?limit=${limit}`
-			if(offset) url += `&offset=${offset}`
-
-			return await fetch()
+			return await fetch(buildUrl(`/assets`, {limit, offset}))
 			.then(res => res.json())
 			.then(json => json.data)
     },
 		asset: async (root, {id}) => {
-			return await fetch(`https://api.coincap.io/v2/assets/${id}`)
+			return await fetch(buildUrl(`/assets/${id}`))
 			.then(res => res.json())
 			.then(json => json.data)
     },
 		assetHistory: async (root, {id, interval, start, end}) => {
-			let url = `https://api.coincap.io/v2/assets/${id}/history?interval=${interval}`;
-			if(start) url += `&start=${start}`
-			if(end) url += `&end=${end}`
-			return await fetch(url)
+			return await fetch(buildUrl(`/assets/${id}/history`, { interval, start, end }))
 			.then(res => res.json())
 			.then(json => json.data)
     },
 		assetMarkets: async (root, {id, limit, offset}) => {
-			let url = `https://api.coincap.io/v2/assets/${id}/markets`;
-			if(limit) url += `&limit=${limit}`
-			if(offset) url += `&offset=${offset}`
-			return await fetch(url)
+			return await fetch(buildUrl(`/assets/${id}/markets`, { limit, offset }))
 			.then(res => res.json())
 			.then(json => json.data)
 		},
 		rates: async (root, {}) => {
-			return await fetch(`https://api.coincap.io/v2/rates`)
+			return await fetch(buildUrl(`/rates`))
 			.then(res => res.json())
 			.then(json => json.data)
 		},
 		rate: async (root, {id}) => {
-			return await fetch(`https://api.coincap.io/v2/rates/${id}`)
+			return await fetch(buildUrl(`/rates/${id}`))
 			.then(res => res.json())
 			.then(json => json.data)
 		},
 		exchanges: async (root, {}) => {
-			return await fetch(`https://api.coincap.io/v2/exchanges`)
+			return await fetch(buildUrl(`/exchanges`))
 			.then(res => res.json())
 			.then(json => json.data)
 		},
 		exchange: async (root, {id}) => {
-			return await fetch(`https://api.coincap.io/v2/exchanges/${id}`)
+			return await fetch(buildUrl(`/exchanges/${id}`))
 			.then(res => res.json())
 			.then(json => json.data)
 		},
-		markets: async (root, {exchangeId,
-			baseSymbol,
-			quoteSymbol,
-			baseId,
-			quoteId,
-			assetSymbol,
-			assetId,
-			limit,
-			offset}
+		markets: async (root, args
 		) => {
-			let url = `https://api.coincap.io/v2/markets`;
-			if(exchangeId) url += `?exchangeId=${exchangeId}`
-			if(baseSymbol) url += `&baseSymbol=${baseSymbol}`
-			if(quoteSymbol) url += `&quoteSymbol=${quoteSymbol}`
-			if(baseId) url += `&baseId=${baseId}`
-			if(quoteId) url += `&quoteId=${quoteId}`
-			if(assetSymbol) url += `&assetSymbol=${assetSymbol}`
-			if(assetId) url += `&assetId=${assetId}`
-			if(limit) url += `&limit=${limit}`
-			if(offset) url += `&offset=${offset}`
-			return await fetch(url)
+			return await fetch(buildUrl(`/markets`, args))
 			.then(res => res.json())
 			.then(json => json.data)
 		},
-		candles: async (root, { exchange,
-			interval,
-			baseId,
-			quoteId,
-			start,
-			end}
-		) => {
-			let url = `https://api.coincap.io/v2/candles`;
-			if(exchange) url += `?exchange=${exchange}`
-			if(interval) url += `&interval=${interval}`
-			if(baseId) url += `&baseId=${baseId}`
-			if(quoteId) url += `&quoteId=${quoteId}`
-			if(start) url += `&start=${start}`
-			if(end) url += `&end=${end}`
-
-			return await fetch(url)
+		candles: async (root, args) => {
+			return await fetch(buildUrl(`/candles`, args))
 			.then(res => res.json())
 			.then(json => json.data)
 		}
-
-
   },
-
 }
 
 const schema = makeExecutableSchema({
@@ -235,11 +211,11 @@ const schema = makeExecutableSchema({
   resolvers
 })
 
-app.use('/graphql', graphqlHTTP({
+app.use(SERVICE_PATH, graphqlHTTP({
   schema: schema,
   graphiql: true,
 }));
 
-app.listen(PORT, () => {
-  console.log(`Visit ${URL}:${PORT}${homePath}`)
+app.listen(SERVICE_PORT, () => {
+  console.log(`Visit http://localhost:${SERVICE_PORT}${SERVICE_PATH}`)
 })
